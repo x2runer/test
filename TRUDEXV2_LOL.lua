@@ -383,7 +383,7 @@ function TRUEDEXV2:CreateWindow(config)
         end)
     end
 
-        -- ====================== COMMON METHODS ======================
+            -- ====================== COMMON METHODS ======================
     local function addCommonMethods(Target, ParentScroll)
         local itemIndex = 0
         local function getIdx() itemIndex = itemIndex + 1 return itemIndex end
@@ -848,6 +848,168 @@ function TRUEDEXV2:CreateWindow(config)
                 if callback then callback() end
             end))
             return b
+        end
+
+        function Target:AddColorPicker(text, default, callback, flag)
+            default = default or Color3.fromRGB(255, 100, 100)
+            
+            local f = Instance.new("Frame")
+            f.Size = UDim2.new(1, 0, 0, 32)
+            f.BackgroundTransparency = 1
+            f.LayoutOrder = getIdx()
+            f.Parent = ParentScroll
+
+            local l = Instance.new("TextLabel")
+            l.Size = UDim2.new(1, -90, 1, 0)
+            l.Position = UDim2.new(0, 10, 0, 0)
+            l.BackgroundTransparency = 1
+            l.Text = text
+            l.TextColor3 = TRUEDEXV2.THEME.TEXT
+            l.Font = Enum.Font.Gotham
+            l.TextSize = 12
+            l.TextXAlignment = Enum.TextXAlignment.Left
+            l.Parent = f
+
+            local preview = Instance.new("TextButton")
+            preview.Size = UDim2.new(0, 70, 0, 22)
+            preview.Position = UDim2.new(1, -80, 0.5, -11)
+            preview.BackgroundColor3 = default
+            preview.Text = ""
+            preview.Parent = f
+            corner(preview, 4)
+            stroke(preview, TRUEDEXV2.THEME.ACCENT, 1)
+
+            local currentColor = default
+            local alpha = 1
+
+            local function updateColor(c, a)
+                currentColor = c
+                alpha = a or 1
+                preview.BackgroundColor3 = c
+                if callback then callback(c, a) end
+                if flag and Window.Flags[flag] then
+                    Window.Flags[flag].Value = {Color = c, Alpha = a}
+                end
+            end
+
+            track(preview.MouseButton1Click:Connect(function()
+                local picker = Instance.new("Frame")
+                picker.Size = UDim2.new(0, 280, 0, 260)
+                picker.Position = UDim2.new(0.5, -140, 0.5, -130)
+                picker.BackgroundColor3 = TRUEDEXV2.THEME.BG_MAIN
+                picker.ZIndex = 100
+                picker.Parent = ScreenGui
+                corner(picker, 10)
+                stroke(picker, TRUEDEXV2.THEME.ACCENT, 2)
+
+                local hueBar = Instance.new("Frame")
+                hueBar.Size = UDim2.new(0, 20, 0, 200)
+                hueBar.Position = UDim2.new(1, -35, 0, 30)
+                hueBar.BackgroundColor3 = Color3.new(1,1,1)
+                hueBar.Parent = picker
+                corner(hueBar, 4)
+
+                local hueGradient = Instance.new("UIGradient")
+                hueGradient.Rotation = 90
+                hueGradient.Color = ColorSequence.new{
+                    ColorSequenceKeypoint.new(0, Color3.fromHSV(0,1,1)),
+                    ColorSequenceKeypoint.new(1/6, Color3.fromHSV(1/6,1,1)),
+                    ColorSequenceKeypoint.new(2/6, Color3.fromHSV(2/6,1,1)),
+                    ColorSequenceKeypoint.new(0.5, Color3.fromHSV(0.5,1,1)),
+                    ColorSequenceKeypoint.new(1, Color3.fromHSV(1,1,1))
+                }
+                hueGradient.Parent = hueBar
+
+                local svBox = Instance.new("Frame")
+                svBox.Size = UDim2.new(0, 200, 0, 200)
+                svBox.Position = UDim2.new(0, 20, 0, 30)
+                svBox.BackgroundColor3 = Color3.fromHSV(0,1,1)
+                svBox.Parent = picker
+                corner(svBox, 6)
+
+                local svGradient = Instance.new("UIGradient")
+                svGradient.Color = ColorSequence.new{
+                    ColorSequenceKeypoint.new(0, Color3.new(1,1,1)),
+                    ColorSequenceKeypoint.new(1, Color3.new(0,0,0))
+                }
+                svGradient.Transparency = NumberSequence.new{
+                    NumberSequenceKeypoint.new(0,0),
+                    NumberSequenceKeypoint.new(1,1)
+                }
+                svGradient.Parent = svBox
+
+                local hue, sat, val = 0, 1, 1
+                local draggingSV, draggingHue = false, false
+
+                local function updateSV()
+                    svBox.BackgroundColor3 = Color3.fromHSV(hue, 1, 1)
+                    updateColor(HSVToRGB(hue, sat, val), alpha)
+                end
+
+                track(svBox.InputBegan:Connect(function(i)
+                    if i.UserInputType == Enum.UserInputType.MouseButton1 then
+                        draggingSV = true
+                        local relX = math.clamp((i.Position.X - svBox.AbsolutePosition.X) / svBox.AbsoluteSize.X, 0, 1)
+                        local relY = math.clamp((i.Position.Y - svBox.AbsolutePosition.Y) / svBox.AbsoluteSize.Y, 0, 1)
+                        sat, val = relX, 1 - relY
+                        updateSV()
+                    end
+                end))
+
+                track(hueBar.InputBegan:Connect(function(i)
+                    if i.UserInputType == Enum.UserInputType.MouseButton1 then
+                        draggingHue = true
+                        local rel = math.clamp((i.Position.Y - hueBar.AbsolutePosition.Y) / hueBar.AbsoluteSize.Y, 0, 1)
+                        hue = rel
+                        updateSV()
+                    end
+                end))
+
+                track(UserInputService.InputChanged:Connect(function(i)
+                    if draggingSV then
+                        local relX = math.clamp((i.Position.X - svBox.AbsolutePosition.X) / svBox.AbsoluteSize.X, 0, 1)
+                        local relY = math.clamp((i.Position.Y - svBox.AbsolutePosition.Y) / svBox.AbsoluteSize.Y, 0, 1)
+                        sat, val = relX, 1 - relY
+                        updateSV()
+                    elseif draggingHue then
+                        local rel = math.clamp((i.Position.Y - hueBar.AbsolutePosition.Y) / hueBar.AbsoluteSize.Y, 0, 1)
+                        hue = rel
+                        updateSV()
+                    end
+                end))
+
+                track(UserInputService.InputEnded:Connect(function(i)
+                    if i.UserInputType == Enum.UserInputType.MouseButton1 then
+                        draggingSV = false
+                        draggingHue = false
+                    end
+                end))
+
+                local closeBtn = Instance.new("TextButton")
+                closeBtn.Size = UDim2.new(0, 24, 0, 24)
+                closeBtn.Position = UDim2.new(1, -30, 0, 5)
+                closeBtn.BackgroundTransparency = 1
+                closeBtn.Text = "✕"
+                closeBtn.TextColor3 = TRUEDEXV2.THEME.TEXT
+                closeBtn.Font = Enum.Font.GothamBold
+                closeBtn.TextSize = 16
+                closeBtn.Parent = picker
+                track(closeBtn.MouseButton1Click:Connect(function()
+                    picker:Destroy()
+                end))
+            end))
+
+            local ColorObj = {Instance = f}
+            function ColorObj:Set(c) 
+                preview.BackgroundColor3 = c 
+                currentColor = c 
+            end
+            function ColorObj:Get() return currentColor end
+
+            if flag then
+                Window.Flags[flag] = {Set = ColorObj.Set, Get = ColorObj.Get, Value = {Color = default, Alpha = 1}}
+            end
+            return ColorObj
         end
 
         function Target:AddProgressBar(text, value, min, max, color)
